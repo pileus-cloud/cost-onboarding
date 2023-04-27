@@ -1,0 +1,223 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Outputs:
+  AnodotRoleArn:
+    Description: Anodot Role ARN
+    Value: !GetAtt 'AnodotRole.Arn'
+Parameters:
+  ExternalId:
+    Description: Insert the External ID you got from Cloudzone
+    Type: String
+  RootOUId:
+    Type: String
+    Description: ID of Organization Root OU
+  
+Resources:
+  S3AnodotBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub 'cur-${AWS::AccountId}'
+      NotificationConfiguration:
+        TopicConfigurations:
+          - Topic: 'arn:aws:sns:us-east-1:932213950603:prod-new-invoice-upload'
+            Event: 's3:ObjectCreated:*'
+  S3AnodotBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: S3AnodotBucket
+    Properties:
+      Bucket: !Ref S3AnodotBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - 
+          Sid: 'Stmt1335892150622dd'
+          Action:
+            - "s3:GetBucketAcl"
+            - "s3:GetBucketPolicy"
+          Effect: "Allow"
+          Resource: !Sub "${S3AnodotBucket.Arn}"
+          Principal:
+            Service: "billingreports.amazonaws.com"
+        - 
+          Sid: "Stmt133589dffsdf0622dd"
+          Action: 
+            - "s3:PutObject"
+          Effect: "Allow"
+          Resource: !Sub "${S3AnodotBucket.Arn}/*"
+          Principal:
+            Service: "billingreports.amazonaws.com"
+  AnodotManagedPolicy:
+    Properties:
+      Description: Anodot Account Policy
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:Get*
+            Resource:
+            - !Sub
+                - arn:aws:s3:::cur-${AccountId}/*
+                - AccountId: !Ref 'AWS::AccountId'
+            - !Sub
+                - arn:aws:s3:::cur-${AccountId}
+                - AccountId: !Ref 'AWS::AccountId'
+          - Effect: Allow
+            Action:
+              - s3:Put*
+            Resource:
+              - arn:aws:s3:::prod-invoice-update/*
+              - arn:aws:s3:::prod-invoice-update
+          - Effect: Allow
+            Action: 
+              - ec2:Describe*
+            Resource: "*"
+          - Effect: Allow
+            Action: 
+              - organizations:ListAccounts
+            Resource: "*"
+          - Effect: Allow
+            Action: 
+              - elasticloadbalancing:Describe*
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:ListBucketVersions
+              - s3:GetBucketVersioning
+              - s3:GetLifecycleConfiguration
+              - s3:GetEncryptionConfiguration
+              - s3:ListAllMyBuckets
+              - s3:ListBucketMultipartUploads
+              - s3:ListMultipartUploadParts
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - cloudwatch:ListMetrics
+              - cloudwatch:GetMetricStatistics
+              - cloudwatch:GetMetricData
+              - logs:DescribeLogGroups
+              - logs:GetQueryResults
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - logs:CreateExportTask
+              - logs:StartQuery
+            Resource:
+              - arn:aws:logs:*:*:log-group:/aws/containerinsights/*/performance
+              - arn:aws:logs:*:*:log-group:/aws/containerinsights/*/performance:*
+              - arn:aws:logs:*:*:log-group:/aws/containerinsights/*/performance:*:*
+          - Effect: Allow
+            Action: 
+              - autoscaling:Describe*
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - eks:ListFargateProfiles
+              - eks:DescribeNodegroup
+              - eks:ListNodegroups
+              - eks:DescribeFargateProfile
+              - eks:ListTagsForResource
+              - eks:ListUpdates
+              - eks:DescribeUpdate
+              - eks:DescribeCluster
+              - eks:ListClusters
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - dynamodb:Describe*
+              - dynamodb:List*
+              - tag:GetResources
+              - rds:DescribeDBInstances
+              - rds:DescribeDBClusters
+              - rds:ListTagsForResource
+              - ecs:DescribeClusters
+              - redshift:DescribeClusters
+              - es:ListDomainNames
+              - es:DescribeElasticsearchDomains
+              - elasticache:DescribeCacheClusters
+              - kinesis:ListStreams
+              - kinesis:DescribeStream
+              - kms:ListKeys
+              - kms:DescribeKey
+              - kms:ListResourceTags
+              - cloudTrail:DescribeTrails
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - ce:GetRightsizingRecommendation
+              - ce:GetReservationUtilization
+              - ce:GetSavingsPlansUtilizationDetails
+              - ce:GetSavingsPlansUtilization
+              - ce:GetSavingsPlansCoverage
+              - ce:GetTags
+              - ce:GetCostAndUsage
+              - aws-portal:ViewBilling
+            Resource: "*"
+          - Effect: Allow
+            Action: 
+              - logs:DescribeExportTasks
+            Resource: "*"
+          - Effect: Allow
+            Action: 
+              - s3:Put*
+            Resource: arn:aws:s3:::prod-k8s-cloudwatch-logs-*
+        Version: '2012-10-17'
+    Type: AWS::IAM::ManagedPolicy
+  AnodotRole:
+    Properties:
+      RoleName: "AnodotRole-Onboarding"
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref 'ExternalId'
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::932213950603:root
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+        - !Ref 'AnodotManagedPolicy'
+    Type: AWS::IAM::Role
+  
+  CostUsageReportDefinitionAnodot:
+    Type: AWS::CUR::ReportDefinition
+    DependsOn: S3AnodotBucketPolicy
+    Properties:
+      AdditionalSchemaElements:
+        - "RESOURCES"
+      Compression: "GZIP"
+      Format: "textORcsv"
+      ReportName: !Sub "cur-${AWS::AccountId}"
+      ReportVersioning: "CREATE_NEW_REPORT"
+      RefreshClosedReports: True
+      S3Bucket: !Ref S3AnodotBucket
+      S3Prefix: "hourly"
+      S3Region: "us-east-1"
+      TimeUnit: "HOURLY"
+
+    ChildAccountsStackSet:
+        Type: 'AWS::CloudFormation::StackSet'
+        DeletionPolicy: Retain
+        Properties:
+          Capabilities:
+            - CAPABILITY_NAMED_IAM
+          StackInstancesGroup:
+            - DeploymentTargets:
+                OrganizationalUnitIds: 
+                  - !Ref RootOUId
+              Regions:
+                - us-east-1
+          AutoDeployment:
+            Enabled: True
+            RetainStacksOnAccountRemoval: False
+          StackSetName: AnodotLinkedAccountRole
+          Description: Deploys Anodot Role to all linked accounts in Organization
+          PermissionModel: SERVICE_MANAGED
+          TemplateURL: !Sub https://pileus-cloudformation-public.s3.amazonaws.com/PileuseOnboardingCFT.json
+          Parameters: 
+            - ParameterKey: ExternalId
+              ParameterValue: !Ref ExternalId
+            
