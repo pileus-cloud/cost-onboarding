@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 # bash Connect2Anodot.sh ExternalId=40f3e3d3
 
 ##import externalId parameter
