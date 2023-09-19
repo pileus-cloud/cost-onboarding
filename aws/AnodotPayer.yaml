@@ -15,7 +15,7 @@ Parameters:
     AllowedValues:
     - 'true'
     - 'false'
-  
+
   CURbucket:
     Type: String
     Default: 'true'
@@ -24,29 +24,13 @@ Parameters:
     - 'true'
     - 'false'
 
-  OrganizationRoleDeployment:
-    Type: String
-    Default: 'false'
-    Description: 'Deploy Anodot Role to all linked accounts - Set to true only in case StackSet is enabled'
-    AllowedValues:
-    - 'true'
-    - 'false'
-
-  RootOUId:
-    Type: String
-    Description: 'ID of Organization Root OU - Change to Your OU ID in case OrganizationRoleDeployment is true'
-    Default: 'r-xxxxx'
-
 Conditions:
-  CondOrganizationRoleDeployment:  !Equals 
-    - !Ref OrganizationRoleDeployment
-    - true
 
-  CondBucket:  !Equals 
+  CondBucket:  !Equals
     - !Ref CURbucket
     - true
 
-  CondCUR:  !Equals 
+  CondCUR:  !Equals
     - !Ref CostAndUsageReport
     - true
 Resources:
@@ -110,15 +94,15 @@ Resources:
               - arn:aws:s3:::prod-invoice-update/*
               - arn:aws:s3:::prod-invoice-update
           - Effect: Allow
-            Action: 
+            Action:
               - ec2:Describe*
             Resource: "*"
           - Effect: Allow
-            Action: 
+            Action:
               - organizations:ListAccounts
             Resource: "*"
           - Effect: Allow
-            Action: 
+            Action:
               - elasticloadbalancing:Describe*
             Resource: "*"
           - Effect: Allow
@@ -150,7 +134,7 @@ Resources:
               - arn:aws:logs:*:*:log-group:/aws/containerinsights/*/performance:*
               - arn:aws:logs:*:*:log-group:/aws/containerinsights/*/performance:*:*
           - Effect: Allow
-            Action: 
+            Action:
               - autoscaling:Describe*
             Resource: "*"
           - Effect: Allow
@@ -239,11 +223,11 @@ Resources:
               - tax:ListTaxRegistrations
             Resource: "*"
           - Effect: Allow
-            Action: 
+            Action:
               - logs:DescribeExportTasks
             Resource: "*"
           - Effect: Allow
-            Action: 
+            Action:
               - s3:Put*
             Resource: arn:aws:s3:::prod-k8s-cloudwatch-logs-*
         Version: '2012-10-17'
@@ -363,33 +347,6 @@ Resources:
     DependsOn: AnodotNotificationLambda
     Properties:
       ServiceToken: !GetAtt AnodotNotificationLambda.Arn
-
-  ChildAccountsStackSet:
-    Type: 'AWS::CloudFormation::StackSet'
-    Condition: CondOrganizationRoleDeployment
-    DeletionPolicy: Retain
-    Properties:
-      Capabilities:
-        - CAPABILITY_NAMED_IAM
-      OperationPreferences:
-        FailureToleranceCount: 2000 
-        MaxConcurrentCount: 1999
-      StackInstancesGroup:
-        - DeploymentTargets:
-            OrganizationalUnitIds: 
-              - !Ref RootOUId
-          Regions:
-            - us-east-1
-      AutoDeployment:
-        Enabled: True
-        RetainStacksOnAccountRemoval: False
-      StackSetName: AnodotLinkedAccountRole
-      Description: Deploys Anodot Role to all linked accounts in Organization
-      PermissionModel: SERVICE_MANAGED
-      TemplateURL: !Sub https://pileus-cloudformation-public.s3.amazonaws.com/PileuseOnboardingCFTv2.json
-      Parameters: 
-        - ParameterKey: ExternalId
-          ParameterValue: !Ref ExternalId
 
   CostUsageReportDefinitionAnodot:
     Type: AWS::CUR::ReportDefinition

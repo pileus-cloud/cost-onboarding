@@ -1,8 +1,9 @@
 ### AWS Script
 
 ##### Command to run the script ./Connect2Anodot.sh 
+Open file Connect2Anodot.sh and change ExternalId 
 ```
-bash ./Connect2Anodot.sh ExternalId=XXXXXX
+bash ./Connect2Anodot.sh
 ```
 
 ##### Option 1
