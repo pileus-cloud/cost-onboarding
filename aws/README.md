@@ -1,13 +1,16 @@
 ### AWS Script
 
 ##### Command to run the script ./Connect2Anodot.sh 
-Open file Connect2Anodot.sh and change ExternalId 
+Open file Connect2Anodot.sh and change ExternalId and RootId
 ```
 bash ./Connect2Anodot.sh
 ```
 
 ##### Option 1
 ``` 
+Activate trusted access with AWS Organizations
+https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-activate-trusted-access.html
+
 Deploys the template below, creates and upload “Connect to Anodot File” to cur bucket.
 CloudFormation Template: AnodotPayer.yaml
 
@@ -15,22 +18,6 @@ Template Deploys:
 - S3 bucket – named cur-<Account-ID>
 - Cost and Usage Report
 - IAM Role with trust policy to account 932213950603(anodot aws account id) with Externalid condition.
+- IAM Role for all linked accounts (optional)
 ```
  
-##### Option 2 (not finished)
-```
-CloudFormation Template with StackSet for linked accounts: AnodotPayerOrganization.yaml
-
-Template Deploys:
-- S3 bucket – named cur-<Account-ID>
-- Cost and Usage Report
-- IAM Role with trust policy to account 932213950603(anodot aws account id) with Externalid condition.
-- CloudFormation StackSet to all  linked accounts – with PileuseOnboardingCFT.json template
-
-Issues:
-- Solution to use only CloudFormation to create all the resources
-- The creation and the upload of  “Connect to Anodot File” (don’t want to use cli\lambda in the process)
-```
-
-##### What is ExternalId
-https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user_externalid.html

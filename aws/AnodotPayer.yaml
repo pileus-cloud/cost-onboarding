@@ -8,6 +8,11 @@ Parameters:
     Description: Insert the External ID you got from Anodot
     Type: String
 
+  RootOUId:
+    Type: String
+    Description: ID of Organization Root OU
+    Default: 'empty'
+
   CostAndUsageReport:
     Type: String
     Default: 'true'
@@ -24,6 +29,14 @@ Parameters:
     - 'true'
     - 'false'
 
+  AnodotLinkedAccountRole:
+    Type: String
+    Default: 'true'
+    Description: 'Deploy Role to all AWS accounts in organization'
+    AllowedValues:
+    - 'true'
+    - 'false'
+
 Conditions:
 
   CondBucket:  !Equals
@@ -33,6 +46,11 @@ Conditions:
   CondCUR:  !Equals
     - !Ref CostAndUsageReport
     - true
+
+  CondAnodotLinkedAccountRole:  !Equals
+    - !Ref AnodotLinkedAccountRole
+    - true
+
 Resources:
   S3AnodotBucket:
     Type: AWS::S3::Bucket
@@ -74,6 +92,7 @@ Resources:
   AnodotManagedPolicy:
     Properties:
       Description: Anodot Account Policy
+      ManagedPolicyName: PileusPolicy
       PolicyDocument:
         Statement:
           - Effect: Allow
@@ -234,7 +253,7 @@ Resources:
     Type: AWS::IAM::ManagedPolicy
   AnodotRole:
     Properties:
-      RoleName: "AnodotRole-Onboarding"
+      RoleName: "PileusRole"
       AssumeRolePolicyDocument:
         Statement:
           - Action: sts:AssumeRole
@@ -364,3 +383,27 @@ Resources:
       S3Prefix: "hourly"
       S3Region: "us-east-1"
       TimeUnit: "HOURLY"
+
+  ChildAccountsStackSet:
+    Type: AWS::CloudFormation::StackSet
+    Condition: CondAnodotLinkedAccountRole
+    DeletionPolicy: Retain
+    Properties:
+      Capabilities:
+        - CAPABILITY_NAMED_IAM
+      StackInstancesGroup:
+        - DeploymentTargets:
+            OrganizationalUnitIds:
+              - !Ref RootOUId
+          Regions:
+            - us-east-1
+      AutoDeployment:
+        Enabled: True
+        RetainStacksOnAccountRemoval: False
+      StackSetName: AnodotLinkedAccountRole
+      Description: Deploys Anodot Role to all linked accounts in Organization
+      PermissionModel: SERVICE_MANAGED
+      TemplateURL: !Sub https://pileus-cloudformation-public.s3.amazonaws.com/PileuseOnboardingCFTv2.json
+      Parameters:
+        - ParameterKey: ExternalId
+          ParameterValue: !Ref ExternalId
