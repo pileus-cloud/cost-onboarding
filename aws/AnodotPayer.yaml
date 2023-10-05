@@ -403,7 +403,7 @@ Resources:
       StackSetName: AnodotLinkedAccountRole
       Description: Deploys Anodot Role to all linked accounts in Organization
       PermissionModel: SERVICE_MANAGED
-      TemplateURL: !Sub https://pileus-cloudformation-public.s3.amazonaws.com/PileuseOnboardingCFTv2.json
+      TemplateURL: !Sub https://pileus-cloudformation-public.s3.amazonaws.com/PileuseOnboardingCFT.json
       Parameters:
         - ParameterKey: ExternalId
           ParameterValue: !Ref ExternalId
