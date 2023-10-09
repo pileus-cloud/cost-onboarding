@@ -8,7 +8,6 @@ export AWS_PROFILE=<profile-name>
 aws sts get-caller-identity
 ```
 
-##### Command to run the script ./Connect2Anodot.sh 
 Open file Connect2Anodot.sh and change: 
 - ExternalId
 - RootId (just for linked accounts)
