@@ -293,7 +293,7 @@ Resources:
               file.write('[DEFAULT]\n')
               file.write('    aws_account_id = '+ACC_ID+'\n')
               file.write('    s3_invoice_bucket = cur-'+ACC_ID+'\n')
-              file.write('    pileus_role_arn = arn:aws:iam::'+ACC_ID+':role/AnodotRole-Onboarding\n    ')
+              file.write('    pileus_role_arn = arn:aws:iam::'+ACC_ID+':role/PileusRole\n    ')
               file.close()
           ########upload file########
               s3 = boto3.client("s3")
