@@ -3,8 +3,8 @@
 ExternalId="40f3e3d3"
 
 # You shuold activate trusted access with AWS Organizations.
-AnodotLinkedAccountRole="true"
-RootOUId="r-sp1e"
+AnodotLinkedAccountRole="false"
+RootOUId="r-XXXX"   # for example: "r-sp1n"
 
 aws --region us-east-1 cloudformation create-stack --stack-name Anodot-Onboarding --template-body file://AnodotPayer.yaml \
                 --parameters ParameterKey=ExternalId,ParameterValue=${ExternalId} \
