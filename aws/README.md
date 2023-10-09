@@ -1,7 +1,20 @@
 ### AWS Script
 
+##### Preparation
+```
+# Prepare aws profile for menagment aws account
+# TO check it
+export AWS_PROFILE=<profile-name>
+aws sts get-caller-identity
+```
+
 ##### Command to run the script ./Connect2Anodot.sh 
-Open file Connect2Anodot.sh and change ExternalId and RootId
+Open file Connect2Anodot.sh and change: 
+- ExternalId
+- RootId (just for linked accounts)
+- If we want to onboard link accounts: AnodotLinkedAccountRole="true"
+- If we want to onboard just managment account: AnodotLinkedAccountRole="false"
+
 ```
 bash ./Connect2Anodot.sh
 ```
