@@ -12,7 +12,7 @@ Open file Connect2Anodot.sh and change:
 - ExternalId
 - RootId (just for linked accounts)
 - If we want to onboard link accounts: AnodotLinkedAccountRole="true"
-  Sould activate trusted access with AWS Organizations: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-activate-trusted-access.html
+  Should activate trusted access with AWS Organizations: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-activate-trusted-access.html
 - If we want to onboard just managment account: AnodotLinkedAccountRole="false"
 
 ```
