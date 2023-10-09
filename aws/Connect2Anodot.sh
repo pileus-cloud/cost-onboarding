@@ -1,9 +1,11 @@
 #!/bin/bash
 
-ExternalId="40f3e3d3"
-
-# You shuold activate trusted access with AWS Organizations.
+ExternalId="<external-id>"
 AnodotLinkedAccountRole="false"
+
+# If AnodotLinkedAccountRole="true"
+# You should activate trusted access with AWS Organizations.
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-activate-trusted-access.html
 RootOUId="r-XXXX"   # for example: "r-sp1n"
 
 aws --region us-east-1 cloudformation create-stack --stack-name Anodot-Onboarding --template-body file://AnodotPayer.yaml \
