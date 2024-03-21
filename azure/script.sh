@@ -172,7 +172,9 @@ read -e -p "$(echo -e "${BLUE}Enter the desired subscription id:${NC} ")" -i "$d
 az account set -s $SUBSCRIPTION_ID
 #
 
+echo -e "${BLUE}Available billing accounts:${NC}"
 az billing account list --query '[].{displayName:displayName,name:name}' --output tsv 2>/dev/null
+echo "---"
 billing_account_ids=($(az billing account list --query '[].name' -o tsv 2>/dev/null))
 read -e -p "$(echo -e "${BLUE}Enter the desired billing account id:${NC} ")" -i "${default_billing_account_id}" billing_account_id
 
