@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
 
+# Defaults
+#export default_subs_id=""
+export default_billing_account_id=""
+export default_appregname="AnodotApp"
+export default_resource_group="AnodotResourceGroup"
+export default_container_name="anodotcontainer"
+export default_storage_account_name="anodotblob1234"
+export default_export_name="Export"
+export default_directory_field="reports"
+
 # Display a banner
 
 # Create log file
@@ -86,6 +96,7 @@ loading() {
   printf "\n"
 }
 
+
 ######## check if the user has owner permission on  subscription level
 echo "Checking if the user has owner permission on the subscription level..."
 loading 1
@@ -108,7 +119,7 @@ if az role assignment list --include-classic-administrators --query "[?principal
   echo -e "${GREEN}The logged-in user has 'Global administrator' or 'User administrator' role on this subscription${NC}"
 else
   echo -e "${RED}The logged-in user does not have 'Global administrator' or 'User administrator' role on this subscription${NC}"
-  exit
+  exit 1
 fi
 echo "---"
 
@@ -139,6 +150,12 @@ echo "---"
 
 echo -e "${GREEN}All checks completed.${NC}"
 echo "---"
+
+
+echo -e "${BLUE}Available subscriptions:${NC}"
+az account list --query '[].{name:name,id:id}' --output tsv
+echo "---"
+
 ############################################
 #-------------------------------
 ### RESOURCE GROUP SELECTION OR CREATION
@@ -148,89 +165,57 @@ echo "---"
 # Get the list of resource groups
 resource_groups=($(az group list --query '[].name' -o tsv))
 
-# Calculate the number of resource groups
-num_groups=${#resource_groups[@]}
+default_subs_id=$(az account list  --output tsv | grep "True" | awk '{print$3}' | head -1)
 
-# Display the resource groups in two columns
-echo "Select a resource group or create a new one:"
-printf "%2d) %-50s\n" 1 "Create new resource group"
-for ((i=0; i < num_groups; i+=2)); do
-  index1=$((i+2))
-  index2=$((i+3))
-  printf "%2d) %-50s%2d) %-50s\n" $index1 "${resource_groups[i]}" $index2 "${resource_groups[i+1]}"
-done
+#
+read -e -p "$(echo -e "${BLUE}Enter the desired subscription id:${NC} ")" -i "$default_subs_id" SUBSCRIPTION_ID
+az account set -s $SUBSCRIPTION_ID
+#
 
-# Prompt the user to select or create a resource group
-while true; do
-  read -p "#? " rg_selection
-  if [[ $rg_selection =~ ^[0-9]+$ ]] && [ $rg_selection -ge 1 ] && [ $rg_selection -le $((num_groups+1)) ]; then
-    break
-  else
-    echo -e "${RED}Invalid selection. Please enter a valid number.${NC}"
-  fi
-done
+az billing account list --query '[].{displayName:displayName,name:name}' --output tsv 2>/dev/null
+billing_account_ids=($(az billing account list --query '[].name' -o tsv 2>/dev/null))
+read -e -p "$(echo -e "${BLUE}Enter the desired billing account id:${NC} ")" -i "${default_billing_account_id}" billing_account_id
 
-if [ $rg_selection -eq 1 ]; then
-  read -p "Enter the name of the new resource group: " new_rg_name
-  az group create --name $new_rg_name --location eastus > /dev/null
-  selected_rg=$new_rg_name
-else
-  selected_rg=${resource_groups[rg_selection-2]}
+#
+echo "---"
+echo -e "${BLUE}If any resource does not exist it will be created.${NC}"
+echo "---"
+
+read -e -p "$(echo -e "${BLUE}Enter the desired application_name:${NC} ")" -i "${default_appregname}" appregname
+
+read -e -p "$(echo -e "${BLUE}Enter the desired resource group: ${NC} ")" -i "${default_resource_group}" resource_group
+
+read -e -p "$(echo -e "${BLUE}Enter the desired container name: ${NC} ")" -i "${default_container_name}" CONTAINER_NAME
+
+echo -e "${GREEN}Storage account name must use numbers and lower-case letters only.${NC}"
+read -e -p "$(echo -e "${BLUE}Enter the desired storage account name: ${NC} ")" -i "${default_storage_account_name}" STORAGE_ACCOUNT_NAME
+
+read -e -p "$(echo -e "${BLUE}Enter the desired export_name: ${NC} ")" -i "${default_export_name}" export_name
+
+read -e -p "$(echo -e "${BLUE}Enter the desired directory field (for the export): ${NC} ")" -i "${default_directory_field}" directory_field
+
+# Variables for the storage account etc.
+from=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+to="2050-02-01T00:00:00+00:00"
+
+# Resource Group
+if ! (az group list --query "[?location=='eastus']" --query [].name -o tsv | grep -q "${resource_group}$"); then
+   az group create --name ${resource_group} --location eastus > /dev/null
 fi
 
 # Display the selected resource group
-echo -e "You selected resource group: ${GREEN} $selected_rg ${NC}"
-#----------------------------------------------------------------------------------------------------------
-#----------------------------------------------------------------------------------------------------------
+echo -e "Resource group: ${GREEN} ${resource_group} ${NC}"
 #----------------------------------------------------------------------------------------------------------
 
-# Function to check storage account name validity
-check_storage_account_name() {
-    local name=$1
-    local length=${#name}
-
-    # Check length
-    if [[ $length -lt 3 ]] || [[ $length -gt 24 ]]; then
-        echo "Storage account name must be between 3 and 24 characters in length."
-        return 1
-    fi
-
-    # Check if contains only numbers and lower-case letters
-    if [[ $name =~ [^a-z0-9] ]]; then
-        echo "Storage account name must use numbers and lower-case letters only."
-        return 1
-    fi
-
-    return 0
-}
-
-# Variables for the storage account etc.
-LOCATION="eastus"
-CONTAINER_NAME="anodotcontainer"
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-from=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-to=$(date -u -d "+1 month" +%Y-%m-%dT%H:%M:%SZ)
-export_name="DemoExport"
-STORAGE_ACCOUNT_KEY=""
-
-# Generate storage account name and check validity
-while true; do
-    STORAGE_ACCOUNT_NAME="anodotblob$(shuf -i 100000-999999 -n 1)"
-    if check_storage_account_name $STORAGE_ACCOUNT_NAME; then
-        break
-    else
-        echo "Invalid storage account name generated. Regenerating..."
-    fi
-done
 
 #-------------------------------
 ### STORAGE CHECKS AND CREATION
 #-------------------------------
 echo
 echo -e "${BLUE}STORAGE CHECKS AND CREATION.${NC} Please, wait..."
-#loading 45 &
-az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $selected_rg --allow-blob-public-access true >/dev/null 2>&1 || exit 1
-while [ "$(az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $selected_rg --query provisioningState -o tsv || echo Failed)" != "Succeeded" ]
+
+az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $resource_group --allow-blob-public-access false  >/dev/null 2>&1 || exit 1
+while [ "$(az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $resource_group --query provisioningState -o tsv || echo Failed)" != "Succeeded" ]
 do
   sleep 5
 done 2>/dev/null
@@ -242,7 +227,7 @@ do
 done 2>/dev/null
 
 # get the storage account key
-STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $selected_rg --account-name $STORAGE_ACCOUNT_NAME --query "[0].value" -o tsv) 2>&1 >/dev/null
+STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $resource_group --account-name $STORAGE_ACCOUNT_NAME --query "[0].value" -o tsv) 2>&1 >/dev/null
 echo -e "${GREEN}Done${NC}"
 echo "---"
 
@@ -253,148 +238,23 @@ echo "---"
 echo
 echo -e "${BLUE}EXPORT CREATION AND EXECUTION${NC}. Please, wait..."
 
-
 # create the export
-# ActualCost, AmortizedCost
+
+set -x
+ba_scope="/providers/Microsoft.Billing/billingAccounts/${billing_account_id}"
 
 az costmanagement export create --name $export_name --type ActualCost \
---scope "subscriptions/$SUBSCRIPTION_ID" \
---storage-account-id /subscriptions/$SUBSCRIPTION_ID/resourceGroups/$selected_rg/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT_NAME \
---storage-container $CONTAINER_NAME --timeframe MonthToDate --recurrence Daily \
---recurrence-period from="$from" to="$to" \
---schedule-status Active --storage-directory demodirectory > /dev/null
-
-# trigger the export via HTTP request
-endpoint="https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/providers/Microsoft.CostManagement/exports/$export_name/run?api-version=2021-10-01"
-request_body='{ "commandName": "Microsoft_Azure_CostManagement.ACM.Exports.run" }'
-access_token=$(az account get-access-token --query accessToken -o tsv)
-
-http_response=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $access_token" -H "Content-Type: application/json" -H "Accept: application/json" -d "$request_body" $endpoint)
-
-# trigger the export via az cli
-az storage blob list --account-name $STORAGE_ACCOUNT_NAME --account-key $STORAGE_ACCOUNT_KEY --container-name $CONTAINER_NAME --output table
-
-# Debug STORAGE_ACCOUNT_KEY
-STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $selected_rg --account-name $STORAGE_ACCOUNT_NAME --query "[0].value" -o tsv)
-#echo "Storage Account Key: $STORAGE_ACCOUNT_KEY"
-
-# Wait for the export file to be generated
-echo "Waiting for the export file to be generated..."
-sleep_duration=60
-max_attempts=30
-attempt_counter=0
-file_found=false
-
-print_progress_bar() {
-  local filled=""
-  local empty=""
-  local progress_bar_width=50
-
-  for ((i = 0; i < $1; i++)); do
-    filled+="="
-  done
-  for ((i = 0; i < $((progress_bar_width - $1)); i++)); do
-    empty+=" "
-  done
-
-  printf "|%-*s|" "$progress_bar_width" "$filled$empty"
-}
-
-function loading() {
-  local duration=$1
-  local sleep_duration=1
-  local max_iterations=$((duration))
-  local iteration=0
-
-  while [ $iteration -lt $max_iterations ]; do
-    printf "\r%s" "$(print_progress_bar $((iteration * 50 / max_iterations)))"
-    sleep $sleep_duration
-    iteration=$((iteration + 1))
-  done
-
-  printf "\n"
-}
-
-while [ $attempt_counter -lt $max_attempts ] && [ "$file_found" = false ]
-do
-  # List the blobs in the container
-  blobs_list=$(az storage blob list --account-name $STORAGE_ACCOUNT_NAME --account-key $STORAGE_ACCOUNT_KEY --container-name $CONTAINER_NAME --query '[].name' -o tsv)
-
-  # Check if any of the blobs match the exported file pattern
-  for blob_name in $blobs_list; do
-    if [[ $blob_name == demodirectory/* ]]; then
-      file_found=true
-      echo -e "\nExported file found: $blob_name"
-      break
-    fi
-  done
-
-  if [ "$file_found" = false ]; then
-    attempt_counter=$((attempt_counter + 1))
-    loading 1
-  fi
-done
-
-if [ "$file_found" = false ]; then
-  echo -e "${RED}The exported file was not found in the container after $max_attempts attempts. Please check the export process or try again later.${NC}"
-  loading 2
-else
-  echo -e "${GREEN}The exported file has been successfully generated and is available in the container.${NC}"
-  loading 2
-fi
-echo "---"
-
- # Re-enable logging after storage account creatio
+ --scope "${ba_scope}" \
+ --storage-account-id /subscriptions/$SUBSCRIPTION_ID/resourceGroups/$resource_group/providers/Microsoft.Storage/storageAccounts/$STORAGE_ACCOUNT_NAME \
+ --storage-container $CONTAINER_NAME --timeframe MonthToDate --recurrence Daily \
+ --recurrence-period from="$from" to="$to" \
+ --schedule-status Active --storage-directory ${directory_field} > /dev/null
+set +x
 
 #-------------------------------
 ### APP REGISTRATION
 #------------------------------
-
-
 echo -e "${BLUE}APP REGISTRATION${NC}"
-# Define the maximum number of attempts
-max_attempts=3
-attempt_counter=0
-
-# Loop until a valid choice is entered or the maximum attempts are reached
-while [ $attempt_counter -lt $max_attempts ]; do
-  # Prompt the user for the application name
-  echo "Select an option for the application name:"
-  echo "1. Use default name (AnodotRegApp)"
-  echo "2. Enter custom name"
-
-  # Read user input
-  read -p "Enter your choice (1 or 2): " choice
-
-  # Process the choice and set the appregname variable accordingly
-  case $choice in
-      1)
-          appregname="AnodotRegApp"
-          break
-          ;;
-      2)
-          read -p "Enter the custom application name: " custom_app_name
-          appregname="$custom_app_name"
-          break
-          ;;
-      *)
-          echo -e "${RED}Invalid choice. Please try again.${NC}"
-          attempt_counter=$((attempt_counter + 1))
-          ;;
-  esac
-done
-
-
-
-# Check if the maximum attempts are reached
-if [ $attempt_counter -ge $max_attempts ]; then
-  echo -e "${RED}Exceeded maximum attempts. Exiting.${NC}"
-  exit 1
-fi
-
-SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null)
-
-#create appregname="anodotregapp"
 
 if (az ad app list --query [].displayName --output tsv | grep -q "${appregname}$" ); then
   clientid=$(az ad app list --query "[].{displayName:displayName, appId:appId}" --output tsv | tr '\t' ' ' | grep "${appregname} " | awk '{print$2}')
@@ -421,45 +281,6 @@ spid=$(az ad sp create --id $clientid --query id --output tsv 2>/dev/null || az 
 #echo "spid $spid"
 
 
-# Set the length of the loading bar
-BAR_LENGTH=50
-
-# Define the print_progress_bar function
-print_progress_bar() {
-  local filled=""
-  local empty=""
-  local progress_bar_width=$BAR_LENGTH
-  local percentage=$((100 * $1 / progress_bar_width))
-  local custom_text="Anodot-AI: control your costs"
-
-  for ((i = 0; i < $1; i++)); do
-    filled+="█"
-  done
-
-  for ((i = 0; i < $((progress_bar_width - $1)); i++)); do
-    empty+="░"
-  done
-
-  printf "%s |%-*s| %3d%%" "$custom_text" "$progress_bar_width" "$filled$empty" "$percentage"
-}
-
-# Define the loading function
-function loading() {
-  local duration=$1
-  local sleep_duration=0.1
-  local max_iterations=$((duration * 10))
-  local iteration=0
-
-  while [ $iteration -lt $max_iterations ]; do
-    printf "\r%s" "$(print_progress_bar $((iteration * BAR_LENGTH / max_iterations)))"
-    sleep $sleep_duration
-    iteration=$((iteration + 1))
-  done
-
-  printf "\n"
-}
-
-
 
 # assign the role_name role to the service principal and check if the role was successfully assigned
 role_name="Monitoring Reader"
@@ -474,8 +295,6 @@ az role assignment create --assignee $spid --role "$role_name" --scope /subscrip
 # check if the role was successfully assigned
 role_assignment=$(az role assignment list --assignee $spid --query "[?roleDefinitionName=='$role_name'].{Name:name, Principal:principalName, Role:roleDefinitionName}" --output json 2>/dev/null)
 
-#loading 2
-
 if [ -z "$role_assignment" ]
 then
     echo -e "${RED}$role_name role was not assigned successfully.${NC}"
@@ -485,43 +304,6 @@ else
     echo "$role_assignment"
 fi
 
-# Set the length of the loading bar
-BAR_LENGTH=50
-
-# Define the print_progress_bar function
-print_progress_bar() {
-  local filled=""
-  local empty=""
-  local progress_bar_width=$BAR_LENGTH
-  local percentage=$((100 * $1 / progress_bar_width))
-  local custom_text="Anodot-AI: control your costs"
-
-  for ((i = 0; i < $1; i++)); do
-    filled+="█"
-  done
-
-  for ((i = 0; i < $((progress_bar_width - $1)); i++)); do
-    empty+="░"
-  done
-
-  printf "%s |%-*s| %3d%%" "$custom_text" "$progress_bar_width" "$filled$empty" "$percentage"
-}
-
-# Define the loading function
-function loading() {
-  local duration=$1
-  local sleep_duration=0.1
-  local max_iterations=$((duration * 10))
-  local iteration=0
-
-  while [ $iteration -lt $max_iterations ]; do
-    printf "\r%s" "$(print_progress_bar $((iteration * BAR_LENGTH / max_iterations)))"
-    sleep $sleep_duration
-    iteration=$((iteration + 1))
-  done
-
-  printf "\n"
-}
 
 # assign the Storage Blob Data Reader role to the service principal and check if the role was successfully assigned
 role_name="Storage Blob Data Reader"
@@ -535,7 +317,6 @@ az role assignment create --assignee $spid --role "$role_name" --scope /subscrip
 
 # check if the role was successfully assigned
 role_assignment=$(az role assignment list --assignee $spid --query "[?roleDefinitionName=='$role_name'].{Name:name, Principal:principalName, Role:roleDefinitionName}" --output json 2>/dev/null)
-#loading 2
 
 if [ -z "$role_assignment" ]
 then
@@ -552,7 +333,7 @@ STORAGE_ACCOUNT_ID=$(az storage account show --name $STORAGE_ACCOUNT_NAME --reso
 CONTAINER_ID="$STORAGE_ACCOUNT_ID/blobServices/default/containers/$CONTAINER_NAME"
 
 #-----------------------------------------
-resource_group_name=$selected_rg
+resource_group_name=$resource_group
 storage_account_name=$STORAGE_ACCOUNT_NAME
 container_name=$CONTAINER_NAME
 
@@ -563,8 +344,6 @@ role_id=$(az role definition list --name "Storage Blob Data Reader" --query "[].
 #az role assignment list --include-inherited \
 #  --scope /subscriptions/$SUBSCRIPTION_ID/resourceGroups/$resource_group_name/providers/Microsoft.Storage/storageAccounts/$storage_account_name/blobContainers/$container_name \
 #  --role $role_id
-
-
 
 
 echo ""
