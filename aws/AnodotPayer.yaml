@@ -7,35 +7,26 @@ Parameters:
   ExternalId:
     Description: Insert the External ID you got from Anodot
     Type: String
-
-  RootOUId:
+  BucketName:
     Type: String
-    Description: ID of Organization Root OU
-    Default: 'empty'
+  BucketRegion:
+    Type: String
 
   CostAndUsageReport:
     Type: String
     Default: 'true'
     Description: 'Deploy CUR'
     AllowedValues:
-    - 'true'
-    - 'false'
+      - 'true'
+      - 'false'
 
   CURbucket:
     Type: String
     Default: 'true'
     Description: 'Deploy S3 Bucket for CUR'
     AllowedValues:
-    - 'true'
-    - 'false'
-
-  AnodotLinkedAccountRole:
-    Type: String
-    Default: 'true'
-    Description: 'Deploy Role to all AWS accounts in organization'
-    AllowedValues:
-    - 'true'
-    - 'false'
+      - 'true'
+      - 'false'
 
 Conditions:
 
@@ -46,21 +37,16 @@ Conditions:
   CondCUR:  !Equals
     - !Ref CostAndUsageReport
     - true
-
-  CondAnodotLinkedAccountRole:  !Equals
-    - !Ref AnodotLinkedAccountRole
-    - true
-
 Resources:
   S3AnodotBucket:
     Type: AWS::S3::Bucket
     Condition: CondBucket
     DeletionPolicy: Retain
     Properties:
-      BucketName: !Sub 'cur-${AWS::AccountId}'
+      BucketName: !Ref 'BucketName'
       NotificationConfiguration:
         TopicConfigurations:
-          - Topic: 'arn:aws:sns:us-east-1:932213950603:prod-new-invoice-upload'
+          - Topic: 'arn:aws:sns:us-east-1:932213950603:dev-new-invoice-upload'
             Event: 's3:ObjectCreated:*'
   S3AnodotBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -71,28 +57,27 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-        - 
-          Sid: 'Stmt1335892150622dd'
-          Action:
-            - "s3:GetBucketAcl"
-            - "s3:GetBucketPolicy"
-          Effect: "Allow"
-          Resource: !Sub "${S3AnodotBucket.Arn}"
-          Principal:
-            Service: "billingreports.amazonaws.com"
-        - 
-          Sid: "Stmt133589dffsdf0622dd"
-          Action: 
-            - "s3:PutObject"
-          Effect: "Allow"
-          Resource: !Sub "${S3AnodotBucket.Arn}/*"
-          Principal:
-            Service: "billingreports.amazonaws.com"
+          -
+            Sid: 'Stmt1335892150622dd'
+            Action:
+              - "s3:GetBucketAcl"
+              - "s3:GetBucketPolicy"
+            Effect: "Allow"
+            Resource: !Sub "${S3AnodotBucket.Arn}"
+            Principal:
+              Service: "billingreports.amazonaws.com"
+          -
+            Sid: "Stmt133589dffsdf0622dd"
+            Action:
+              - "s3:PutObject"
+            Effect: "Allow"
+            Resource: !Sub "${S3AnodotBucket.Arn}/*"
+            Principal:
+              Service: "billingreports.amazonaws.com"
 
   AnodotManagedPolicy:
     Properties:
       Description: Anodot Account Policy
-      ManagedPolicyName: PileusPolicy
       PolicyDocument:
         Statement:
           - Effect: Allow
@@ -100,18 +85,18 @@ Resources:
               - s3:ListBucket
               - s3:Get*
             Resource:
-            - !Sub
-                - arn:aws:s3:::cur-${AccountId}/*
-                - AccountId: !Ref 'AWS::AccountId'
-            - !Sub
-                - arn:aws:s3:::cur-${AccountId}
-                - AccountId: !Ref 'AWS::AccountId'
+              - !Sub
+                - arn:aws:s3:::${BucketName}/*
+                - BucketName: !Ref 'BucketName'
+              - !Sub
+                - arn:aws:s3:::${BucketName}
+                - BucketName: !Ref 'BucketName'
           - Effect: Allow
             Action:
               - s3:Put*
             Resource:
-              - arn:aws:s3:::prod-invoice-update/*
-              - arn:aws:s3:::prod-invoice-update
+              - arn:aws:s3:::dev-invoice-update/*
+              - arn:aws:s3:::dev-invoice-update
           - Effect: Allow
             Action:
               - ec2:Describe*
@@ -216,10 +201,10 @@ Resources:
               - ce:GetReservationPurchaseRecommendation
               - ce:GetReservationUtilization
               - ce:GetRightsizingRecommendation
-              - ce:GetSavingsPlansCoverage
               - ce:GetSavingsPlansPurchaseRecommendation
               - ce:GetSavingsPlansUtilization
               - ce:GetSavingsPlansUtilizationDetails
+              - ce:GetSavingsPlansCoverage
               - ce:GetTags
               - ce:GetUsageForecast
               - ce:ListCostAllocationTags
@@ -227,6 +212,8 @@ Resources:
               - consolidatedbilling:GetAccountBillingRole
               - consolidatedbilling:ListLinkedAccounts
               - cur:GetClassicReport
+              - cur:DescribeReportDefinitions
+              - cur:GetUsageReport
               - cur:GetClassicReportPreferences
               - cur:ValidateReportDestination
               - freetier:GetFreeTierAlertPreference
@@ -248,7 +235,7 @@ Resources:
           - Effect: Allow
             Action:
               - s3:Put*
-            Resource: arn:aws:s3:::prod-k8s-cloudwatch-logs-*
+            Resource: arn:aws:s3:::dev-k8s-cloudwatch-logs-*
         Version: '2012-10-17'
     Type: AWS::IAM::ManagedPolicy
   AnodotRole:
@@ -274,8 +261,9 @@ Resources:
     Properties:
       Environment:
         Variables:
+          BucketName: !Ref 'BucketName'
           ACC_ID: !Ref 'AWS::AccountId'
-          FunctionName: OnboardingAnodotNotificationLambda
+          FunctionName: OnboardingAutoAnodotNotificationLambda
       Code:
         ZipFile: |
           import boto3
@@ -285,19 +273,19 @@ Resources:
           import cfnresponse
 
           def main(event, context):
-              
+          
           ########create file########
               ACC_ID = os.environ.get('ACC_ID')
               file_path = ('/tmp/'+ACC_ID+'_connect_to_pileus.txt')
               file = open(file_path, 'w')
               file.write('[DEFAULT]\n')
               file.write('    aws_account_id = '+ACC_ID+'\n')
-              file.write('    s3_invoice_bucket = cur-'+ACC_ID+'\n')
+              file.write('    s3_invoice_bucket = '+BucketName+'\n')
               file.write('    pileus_role_arn = arn:aws:iam::'+ACC_ID+':role/PileusRole\n    ')
               file.close()
           ########upload file########
               s3 = boto3.client("s3")
-              bucket_name = 'cur-'+ACC_ID
+              bucket_name = BucketName
               object_name = ACC_ID+"_connect_to_pileus.txt"
               file_name = os.path.join('/tmp', ACC_ID+'_connect_to_pileus.txt')
               response = s3.upload_file(file_name, bucket_name, object_name)
@@ -311,54 +299,54 @@ Resources:
             client = boto3.client('lambda')
             client.delete_function(FunctionName=function_name)
 
-      FunctionName: OnboardingAnodotNotificationLambda
+      FunctionName: OnboardingAutoAnodotNotificationLambda
       Handler: index.main
       Role: !GetAtt
-        - OnboardingAnodotNotificationLambdaRole
+        - OnboardingAutoAnodotNotificationLambdaRole
         - Arn
       Runtime: python3.9
       Timeout: 120
-  OnboardingAnodotNotificationLambdaRole:
+  OnboardingAutoAnodotNotificationLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: OnboardingAnodotNotificationLambdaRole
+      RoleName: OnboardingAutoAnodotNotificationLambdaRole
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-              - lambda.amazonaws.com
-          Action:
-            - sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
       Path: /
       Policies:
-        - PolicyName: OnboardingAnodotNotificationLambdaPolicy
+        - PolicyName: OnboardingAutoAnodotNotificationLambdaPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Sid: "BasicExecution"
                 Effect: Allow
-                Action: 
+                Action:
                   - 'logs:CreateLogGroup'
                 Resource: !Join [':',['arn:aws:logs',!Ref 'AWS::Region', !Ref 'AWS::AccountId','*']]
               - Sid: "PutLogEvents"
                 Effect: Allow
-                Action: 
+                Action:
                   - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'  
+                  - 'logs:PutLogEvents'
                 Resource: !Join ['',['arn:aws:logs:','*:',!Ref 'AWS::AccountId',':log-group:/aws/lambda/', 'AnodotNotificationLambdaUpdate', ':*' ]]
               - Sid: "AnodotNotificationLambda"
                 Effect: Allow
-                Action: 
+                Action:
                   - s3:PutObject
                   - s3:GetObject
-                Resource: !Join ['',['arn:aws:s3:::','cur-',!Ref 'AWS::AccountId','/*']]
+                Resource: !Join ['',['arn:aws:s3:::',!Ref 'BucketName','/*']]
               - Sid: "DeleteLambda"
                 Effect: Allow
-                Action: 
+                Action:
                   - 'lambda:DeleteFunction'
-                Resource: !Join ['',['arn:aws:lambda:','us-east-1:',!Ref 'AWS::AccountId',':function',':OnboardingAnodotNotificationLambda']]
+                Resource: !Join ['',['arn:aws:lambda:','us-east-1:',!Ref 'AWS::AccountId',':function',':OnboardingAutoAnodotNotificationLambda']]
 
 
   RunNotificationLambda:
@@ -381,29 +369,5 @@ Resources:
       RefreshClosedReports: True
       S3Bucket: !Ref S3AnodotBucket
       S3Prefix: "hourly"
-      S3Region: "us-east-1"
+      S3Region: !Ref 'BucketRegion'
       TimeUnit: "HOURLY"
-
-  ChildAccountsStackSet:
-    Type: AWS::CloudFormation::StackSet
-    Condition: CondAnodotLinkedAccountRole
-    DeletionPolicy: Retain
-    Properties:
-      Capabilities:
-        - CAPABILITY_NAMED_IAM
-      StackInstancesGroup:
-        - DeploymentTargets:
-            OrganizationalUnitIds:
-              - !Ref RootOUId
-          Regions:
-            - us-east-1
-      AutoDeployment:
-        Enabled: True
-        RetainStacksOnAccountRemoval: False
-      StackSetName: AnodotLinkedAccountRole
-      Description: Deploys Anodot Role to all linked accounts in Organization
-      PermissionModel: SERVICE_MANAGED
-      TemplateURL: !Sub https://pileus-cloudformation-public.s3.amazonaws.com/PileuseOnboardingCFT.json
-      Parameters:
-        - ParameterKey: ExternalId
-          ParameterValue: !Ref ExternalId
