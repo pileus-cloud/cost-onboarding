@@ -384,6 +384,14 @@ Resources:
       S3Region: "us-east-1"
       TimeUnit: "HOURLY"
 
+
+  LinkedAccountsOrganizationalUnit:
+    Type: AWS::Organizations::OrganizationalUnit
+    Condition: CondAnodotLinkedAccountRole
+    Properties:
+      Name: AnodotLinkedAccounts
+      ParentId: !Ref RootOUId
+
   ChildAccountsStackSet:
     Type: AWS::CloudFormation::StackSet
     Condition: CondAnodotLinkedAccountRole
@@ -394,7 +402,7 @@ Resources:
       StackInstancesGroup:
         - DeploymentTargets:
             OrganizationalUnitIds:
-              - !Ref RootOUId
+              - !GetAtt LinkedAccountsOrganizationalUnit.Id
           Regions:
             - us-east-1
       AutoDeployment:
