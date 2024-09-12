@@ -42,7 +42,32 @@ This CloudFormation template creates a Lambda function that manages AWS CloudFor
    The function is triggered every hour by a CloudWatch Event rule.
 
 ## Usage
+0. StackSets Trusted Access
+  Ensure that trusted access for CloudFormation StackSets is enabled in AWS Organizations. Use the following script to check and enable trusted access:
 
+```bash
+StackSetsTrustAccess() {
+  # Check if CloudFormation StackSets trusted access is already enabled
+  SERVICE_PRINCIPAL="member.org.stacksets.cloudformation.amazonaws.com"
+
+  # List services with trusted access enabled
+  ENABLED_SERVICES=$(aws organizations list-aws-service-access-for-organization --query 'EnabledServicePrincipals[].ServicePrincipal' --output text)
+
+  # Check if StackSets is in the list
+  if echo "$ENABLED_SERVICES" | grep -q "$SERVICE_PRINCIPAL"; then
+    echo "Trusted access for CloudFormation StackSets is already enabled."
+  else
+    echo "Could you please enable trusted access for CloudFormation StackSets..."
+    # You should activate trusted access with AWS Organizations.
+    echo "https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-activate-trusted-access.html"
+    exit 1
+
+    # Enable trusted access for CloudFormation StackSets
+    # aws organizations enable-aws-service-access --service-principal $SERVICE_PRINCIPAL
+
+    # echo "Trusted access for CloudFormation StackSets has been enabled."
+  fi
+}
 1. Deploy the CloudFormation template.
 2. Provide the `ExternalId` from Anodot as a parameter.
 ```
