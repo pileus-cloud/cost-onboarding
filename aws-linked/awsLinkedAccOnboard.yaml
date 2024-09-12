@@ -1,0 +1,204 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  ExternalId:
+    Description: Insert the External ID you got from Anodot
+    Type: String
+  StackSetName:
+    Description: Name of the StackSet to manage
+    Type: String
+    Default: "AnodotLinkedAccountTest"
+
+Resources:
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaExecutionRoleForStackSet
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: LambdaStackSetPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - organizations:ListAccounts
+                  - organizations:ListTagsForResource
+                  - organizations:ListOrganizationalUnitsForParent
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "cloudformation:ListStackSets"
+                  - "cloudformation:CreateStackSet"
+                  - "cloudformation:CreateStackInstances"
+                  - "cloudformation:ListStackInstances"
+                  - "cloudformation:DeleteStackInstances"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "cloudformation:*"
+                Resource: !Sub "arn:aws:cloudformation:us-east-1:${AWS::AccountId}:stackset/${StackSetName}"
+              - Effect: Allow
+                Action:
+                  - "organizations:ListRoots"
+                Resource: "*"
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: UpdateAnodotStackSetFunction
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.11
+      Timeout: 120
+      Environment:
+        Variables:
+          STACK_SET_NAME: !Ref StackSetName
+          EXTERNAL_ID: !Ref ExternalId
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          org_client = boto3.client('organizations', region_name="us-east-1")
+          cf_client = boto3.client('cloudformation', region_name="us-east-1")
+
+          STACK_SET_NAME = os.environ['STACK_SET_NAME']
+
+          def get_all_accounts():
+              accounts = []
+              paginator = org_client.get_paginator('list_accounts')
+              for page in paginator.paginate():
+                  accounts.extend(page['Accounts'])
+              return accounts
+
+          def get_account_tags(account_id):
+              try:
+                  response = org_client.list_tags_for_resource(ResourceId=account_id)
+                  tags = response.get('Tags', [])
+                  return tags
+              except Exception as e:
+                  print(f"Error fetching tags for account {account_id}: {e}")
+                  return []
+
+          def is_anodot_onboarded(tags):
+              for tag in tags:
+                  if tag['Key'] == 'anodot' and tag['Value'] == 'onboarded':
+                      return True
+              return False
+
+          def get_onboarded_accounts():
+              accounts = get_all_accounts()
+              onboarded_account_ids = []
+              for account in accounts:
+                  account_id = account['Id']
+                  tags = get_account_tags(account_id)
+                  if is_anodot_onboarded(tags):
+                      onboarded_account_ids.append(account_id)
+              return onboarded_account_ids
+
+          # Function to get the root ID of the organization
+          def get_organization_root_id():
+              try:
+                  response = org_client.list_roots()
+                  root_id = response['Roots'][0]['Id']  # Extract the root ID
+                  print(f"Organization Root ID: {root_id}")
+                  return root_id
+              except Exception as e:
+                  print(f"Error retrieving organization root ID: {e}")
+
+          def manage_stackset(onboarded_account_ids):
+              try:
+                  stacksets = cf_client.list_stack_sets(Status='ACTIVE')['Summaries']
+                  existing_stackset = next((s for s in stacksets if s['StackSetName'] == STACK_SET_NAME), None)
+
+                  if existing_stackset:
+
+                       # Clean up stack instances
+                       stack_instances = cf_client.list_stack_instances(
+                           StackSetName=STACK_SET_NAME
+                       )['Summaries']
+
+                       stack_instances_ac = [i['Account'] for i in stack_instances]
+                       stack_instances_del = list(set(stack_instances_ac) - set(onboarded_account_ids))
+
+                       if len(stack_instances_del) > 0:
+                           response = cf_client.delete_stack_instances(
+                               StackSetName=STACK_SET_NAME,
+                               DeploymentTargets={
+                                   'Accounts': stack_instances_del,
+                                   'OrganizationalUnitIds': [get_organization_root_id()],
+                                   'AccountFilterType': 'INTERSECTION'
+                               },
+                               Regions=['us-east-1'],
+                               RetainStacks=False
+                           )
+                           print(f"{stack_instances_del} was deleted")
+                           print("Stack instances creation postponed to the next execution")
+
+                       # Create stack instances
+                       if len(onboarded_account_ids) > 0 and len(stack_instances_del) == 0:
+                           response = cf_client.create_stack_instances(
+                               StackSetName=STACK_SET_NAME,
+                               DeploymentTargets={
+                                   'OrganizationalUnitIds': [get_organization_root_id()],
+                                   'Accounts': onboarded_account_ids,
+                                   'AccountFilterType': 'INTERSECTION'
+                               },
+                               Regions=['us-east-1'],
+                           )
+
+                           print("Stack instances creation initiated:", response)
+
+              except Exception as e:
+                  print(f"Error managing StackSet: {e}")
+
+          def handler(event, context):
+              onboarded_account_ids = get_onboarded_accounts()
+              print(onboarded_account_ids)
+              manage_stackset(onboarded_account_ids)
+
+  LambdaTriggerRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(1 hour)
+      Targets:
+        - Arn: !GetAtt LambdaFunction.Arn
+          Id: LambdaTrigger
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref LambdaFunction
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt LambdaTriggerRule.Arn
+
+
+  ### StackSet Definition ###
+  AnodotAccountsStackSet:
+    Type: AWS::CloudFormation::StackSet
+    Properties:
+      StackSetName: !Ref StackSetName
+      Description: Deploys Anodot Role to all linked accounts in Organization
+      PermissionModel: SERVICE_MANAGED
+      AutoDeployment:
+        Enabled: true
+        RetainStacksOnAccountRemoval: false
+      Parameters:
+        - ParameterKey: ExternalId
+          ParameterValue: !Ref ExternalId
+      TemplateURL: !Sub https://pileus-cloudformation-public.s3.amazonaws.com/PileuseOnboardingCFT.json
+      Capabilities:
+        - CAPABILITY_NAMED_IAM
