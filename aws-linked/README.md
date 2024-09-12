@@ -42,9 +42,8 @@ This CloudFormation template creates a Lambda function that manages AWS CloudFor
    The function is triggered every hour by a CloudWatch Event rule.
 
 ## Usage
-0. StackSets Trusted Access
-  Ensure that trusted access for CloudFormation StackSets is enabled in AWS Organizations. Use the following script to check and enable trusted access:
-
+0. StackSets Trusted Access.
+  **Ensure that trusted access for CloudFormation StackSets is enabled in AWS Organizations. Use the following script to check and enable trusted access**:
 ```bash
 StackSetsTrustAccess() {
   # Check if CloudFormation StackSets trusted access is already enabled
