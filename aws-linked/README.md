@@ -62,8 +62,8 @@ StackSetsTrustAccess() {
     echo "https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-activate-trusted-access.html"
     exit 1
 
-    # Enable trusted access for CloudFormation StackSets
-    # Does not work correctly on 09/13/2024
+    # Enable trusted access for CloudFormation StackSets via cli
+    # Does not work correctly via cli on 09/13/2024
     # aws organizations enable-aws-service-access --service-principal $SERVICE_PRINCIPAL
 
     # echo "Trusted access for CloudFormation StackSets has been enabled."
