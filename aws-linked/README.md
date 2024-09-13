@@ -67,6 +67,7 @@ StackSetsTrustAccess() {
     # echo "Trusted access for CloudFormation StackSets has been enabled."
   fi
 }
+StackSetsTrustAccess
 ```
 1. Deploy the CloudFormation template.
 2. Provide the `ExternalId` from Anodot as a parameter.
