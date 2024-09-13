@@ -63,6 +63,7 @@ StackSetsTrustAccess() {
     exit 1
 
     # Enable trusted access for CloudFormation StackSets
+    # Does not work correctly on 09/13/2024
     # aws organizations enable-aws-service-access --service-principal $SERVICE_PRINCIPAL
 
     # echo "Trusted access for CloudFormation StackSets has been enabled."
