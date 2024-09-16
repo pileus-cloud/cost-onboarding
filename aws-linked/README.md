@@ -7,6 +7,49 @@ This CloudFormation template creates a Lambda function that manages AWS CloudFor
 - **ExternalId**: (Required) External ID provided by Anodot.
 - **StackSetName**: (Optional) The name of the CloudFormation StackSet. Default is `AnodotLinkedAccountTest`.
 
+# Recursive version ( awsLinkedAccOnboardRecursive.yaml )
+
+### Lambda Function: `GetRootIdLambda`
+- **Description**: Retrieves the root ID of the AWS Organization using the `organizations:list_roots` API.
+- **Runtime**: Python 3.11
+- **Timeout**: 30 seconds
+- **IAM Role**: The Lambda function is granted permissions to query the AWS Organizations API (`organizations:ListRoots`) via the `LambdaExecutionRole`.
+
+### IAM Role: `LambdaExecutionRole`
+- **Description**: An IAM role that allows the Lambda function to assume the necessary permissions to query the AWS Organizations API.
+
+### Custom Resource: `GetOrganizationRootId`
+- **Description**: Calls the Lambda function (`GetRootIdLambda`) to obtain the root ID of the AWS Organization. The root ID is later used to target all accounts under the organization for StackSet deployment.
+
+### StackSet: `AnodotAccountsStackSet`
+- **Description**: Creates a CloudFormation StackSet that deploys an IAM role to all accounts within the AWS Organization.
+- **Target**: All accounts under the organization, identified by the root ID.
+- **Template URL**: A predefined CloudFormation template hosted on S3 (`PileuseOnboardingCFT.json`) will be deployed to each account.
+- **Auto Deployment**: Enabled, so any new accounts added to the organization will automatically receive the IAM role.
+
+## Template Explanation
+
+### Lambda for Retrieving Root ID
+- **GetRootIdLambda**: This Lambda function fetches the root ID of your AWS Organization, which is necessary to target all accounts in the StackSet.
+
+### StackSet Creation
+- **AnodotAccountsStackSet**: This resource creates a StackSet that deploys the IAM role for Anodot across all accounts in the AWS Organization. The IAM role will allow Anodot to assume the role for cross-account access.
+
+### Deployment
+- The StackSet is deployed to all accounts under the organization using the root ID retrieved by the Lambda function.
+- **AutoDeployment** is enabled to ensure that any new accounts added to the Organization will automatically receive the IAM role.
+
+## Key Features
+- **Automated Account Linking**: Automatically deploys the required IAM role to all accounts in the AWS Organization.
+- **Auto Deployment**: Ensures new accounts in the Organization automatically receive the IAM role.
+- **Customizable StackSet**: Allows customization of the StackSet name and other properties as needed.
+
+
+
+
+
+# Version with a selection of accounts ( awsLinkedAccOnboard.yaml  )
+
 ## Resources
 
 - **LambdaExecutionRole**: 
@@ -41,7 +84,9 @@ This CloudFormation template creates a Lambda function that manages AWS CloudFor
 4. **Scheduled Execution**: 
    The function is triggered every hour by a CloudWatch Event rule.
 
-## Usage
+
+
+# Usage
 0. StackSets Trusted Access.
   **Ensure that trusted access for CloudFormation StackSets is enabled in AWS Organizations. Use the following script to check and enable trusted access**:
 ```bash
