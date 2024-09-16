@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  ExternalId:
+    Description: Insert the External ID you got from Anodot
+    Type: String
+  StackSetName:
+    Description: Name of the StackSet to manage
+    Type: String
+    Default: "AnodotLinkedAccountTest2"
+
+Resources:
+
+  GetRootIdLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+
+          def lambda_handler(event, context):
+              client = boto3.client('organizations')
+              try:
+                  response = client.list_roots()
+                  root_id = response['Roots'][0]['Id']
+                  responseData = {
+                      'RootId': root_id
+                  }
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+              except Exception as e:
+                  print(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.11
+      Timeout: 30
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - organizations:ListRoots
+                Resource: "*"
+
+  GetOrganizationRootId:
+    Type: Custom::GetOrganizationRootId
+    Properties:
+      ServiceToken: !GetAtt GetRootIdLambda.Arn
+
+  ### StackSet Definition ###
+  AnodotAccountsStackSet:
+    Type: AWS::CloudFormation::StackSet
+    Properties:
+      StackSetName: !Ref StackSetName
+      Description: Deploys Anodot Role to all linked accounts in Organization
+      PermissionModel: SERVICE_MANAGED
+      AutoDeployment:
+        Enabled: true
+        RetainStacksOnAccountRemoval: false
+      StackInstancesGroup:
+        - DeploymentTargets:
+            OrganizationalUnitIds:
+              - !GetAtt GetOrganizationRootId.RootId
+          Regions:
+            - us-east-1
+      Parameters:
+        - ParameterKey: ExternalId
+          ParameterValue: !Ref ExternalId
+      TemplateURL: !Sub https://pileus-cloudformation-public.s3.amazonaws.com/PileuseOnboardingCFT.json
+      Capabilities:
+        - CAPABILITY_NAMED_IAM
