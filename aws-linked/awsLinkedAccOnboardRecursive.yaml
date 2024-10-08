@@ -7,7 +7,7 @@ Parameters:
   StackSetName:
     Description: Name of the StackSet to manage
     Type: String
-    Default: "AnodotLinkedAccountTest2"
+    Default: "AnodotLinkedAccount"
 
 Resources:
 
