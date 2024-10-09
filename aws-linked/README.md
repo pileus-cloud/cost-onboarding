@@ -1,6 +1,6 @@
 # Anodot AWS StackSet Management
 
-This CloudFormation template creates a Lambda function that manages AWS CloudFormation StackSets across multiple AWS accounts in an AWS Organization. The StackSet deploys resources to onboarded accounts that are tagged with `anodot:onboarded`.
+This CloudFormation template creates a Lambda function that manages AWS CloudFormation StackSets across multiple AWS accounts in an AWS Organization. 
 
 ## Parameters
 
