@@ -1,0 +1,4 @@
+*                       @pileus-cloud/dev
+Jenkinsfile             @pileus-cloud/devops
+**/helm                 @pileus-cloud/devops
+./github/               @pileus-cloud/devops @pileus-cloud/dev
