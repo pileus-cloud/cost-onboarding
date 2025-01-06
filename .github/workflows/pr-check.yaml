@@ -1,4 +1,4 @@
-name: Pull Reust Checks
+name: Pull Reqeust Checks
 
 on:
   pull_request:
