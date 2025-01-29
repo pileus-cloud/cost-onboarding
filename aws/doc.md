@@ -43,8 +43,8 @@ Before running the script, ensure the following:
 - **`deploy_anodot.sh`**: The main deployment script to automate onboarding.
 
 ### CloudFormation Templates
-- **`anodotpayer.yaml`**: Deploys Anodot-related AWS resources for the payer account.
-- **`anodotlinkedrecursive.yaml`**: Deploys StackSets to onboard linked accounts.
+- **`AnodotPayer.yaml`**: Deploys Anodot-related AWS resources for the payer account.
+- **`AnodotLinkedRecursive.yaml`**: Deploys StackSets to onboard linked accounts.
 
 ## Parameters
 The following parameters are used in the deployment:
