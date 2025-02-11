@@ -120,6 +120,11 @@ Resources:
             Resource: "*"
           - Effect: Allow
             Action:
+              - secretsmanager:DescribeSecret
+              - secretsmanager:ListSecrets
+            Resource: "*"            
+          - Effect: Allow
+            Action:
               - cloudwatch:ListMetrics
               - cloudwatch:GetMetricStatistics
               - cloudwatch:GetMetricData
